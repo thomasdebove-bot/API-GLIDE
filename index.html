@@ -3,56 +3,87 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Tableau Glide API</title>
+  <title>Tableaux Glide API</title>
   <style>
     :root {
       color-scheme: light;
       font-family: Arial, Helvetica, sans-serif;
     }
+
     body {
       margin: 0;
       padding: 2rem;
       background: #f5f7fb;
       color: #172554;
     }
+
     .card {
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
       padding: 1.5rem;
-      overflow-x: auto;
     }
+
     h1 {
-      margin-top: 0;
-      font-size: 1.5rem;
+      margin: 0 0 0.75rem;
+      font-size: 1.6rem;
     }
+
     .status {
-      margin: 0.75rem 0 1rem;
+      margin: 0 0 1rem;
       color: #1e3a8a;
       font-size: 0.95rem;
     }
+
+    .table-block {
+      margin: 1.25rem 0 1.75rem;
+    }
+
+    .table-title {
+      margin: 0 0 0.55rem;
+      font-size: 1rem;
+      color: #1e293b;
+      word-break: break-all;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
       min-width: 700px;
     }
+
     th,
     td {
       border: 1px solid #cbd5e1;
       text-align: left;
-      padding: 0.6rem;
-      font-size: 0.9rem;
+      padding: 0.55rem;
+      font-size: 0.88rem;
       vertical-align: top;
     }
+
     th {
       background: #dbeafe;
       position: sticky;
       top: 0;
       z-index: 1;
     }
+
     tr:nth-child(even) {
       background: #f8fafc;
     }
+
+    .empty {
+      color: #475569;
+      font-size: 0.9rem;
+      margin: 0;
+    }
+
     .error {
       color: #b91c1c;
       font-weight: 600;
@@ -61,26 +92,26 @@
 </head>
 <body>
   <div class="card">
-    <h1>Tableau HTML depuis l'API Glide</h1>
-    <p class="status" id="status">Chargement des données...</p>
-    <table id="resultTable" hidden>
-      <thead></thead>
-      <tbody></tbody>
-    </table>
+    <h1>Tableaux HTML depuis l'API Glide</h1>
+    <p class="status" id="status">Chargement des tableaux...</p>
+    <div id="tablesContainer"></div>
   </div>
 
   <script>
     const endpoint = "https://api.glideapp.io/api/function/queryTables";
+    const appID = "PZ1dP47ufkN78pXueCgR";
 
-    const payload = {
-      appID: "PZ1dP47ufkN78pXueCgR",
-      queries: [
-        {
-          tableName: "native-table-bZnCr8gfqBCIWXs6zQN0",
-          utc: true,
-        },
-      ],
-    };
+    const tableNames = [
+      "native-table-bZnCr8gfqBCIWXs6zQN0",
+      "native-table-qQtBfW3I3zbQYJd4b3oF",
+      "native-table-TMyqY3QoRnrwxwiGAbtQ",
+      "native-table-kobr2RnCIFy37TwGZru7",
+      "native-table-KGRQvtu1WOekv5gWdeOK",
+      "native-table-l3VPF8l7fR0KbeNJFlpa",
+      "native-table-urMYAnbpK1LmRAsswp0b",
+      "native-table-SGG8CDR02KNZSTbFqpll",
+      "native-table-Lzw3HjYwvlixIiqewS9S"
+    ];
 
     const headers = {
       Authorization: "Bearer 530611e9-84df-44ea-84bc-ce4f66202aaa",
@@ -88,52 +119,75 @@
     };
 
     const statusEl = document.getElementById("status");
-    const tableEl = document.getElementById("resultTable");
-    const theadEl = tableEl.querySelector("thead");
-    const tbodyEl = tableEl.querySelector("tbody");
+    const containerEl = document.getElementById("tablesContainer");
 
     function normalizeRows(apiResult) {
+      if (!apiResult) return [];
+      if (Array.isArray(apiResult.rows)) return apiResult.rows;
       if (Array.isArray(apiResult)) {
         return apiResult.flatMap((entry) => {
           if (Array.isArray(entry)) return entry;
-          if (Array.isArray(entry.rows)) return entry.rows;
+          if (entry && Array.isArray(entry.rows)) return entry.rows;
           return [];
         });
       }
-
-      if (apiResult && Array.isArray(apiResult.rows)) {
-        return apiResult.rows;
-      }
-
       return [];
     }
 
-    function renderTable(rows) {
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+
+    function createTableMarkup(rows) {
       if (!rows.length) {
-        statusEl.textContent = "Aucune ligne retournée par l'API.";
-        return;
+        return '<p class="empty">Aucune ligne retournée pour ce tableau.</p>';
       }
 
       const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+      const head = `<tr>${columns.map((col) => `<th>${escapeHtml(col)}</th>`).join("")}</tr>`;
 
-      theadEl.innerHTML = `<tr>${columns.map((col) => `<th>${col}</th>`).join("")}</tr>`;
-      tbodyEl.innerHTML = rows
+      const body = rows
         .map((row) => {
-          return `<tr>${columns
+          const rowCells = columns
             .map((col) => {
               const value = row[col];
-              return `<td>${value == null ? "" : String(value)}</td>`;
+              const printable = value == null ? "" : typeof value === "object" ? JSON.stringify(value) : String(value);
+              return `<td>${escapeHtml(printable)}</td>`;
             })
-            .join("")}</tr>`;
+            .join("");
+
+          return `<tr>${rowCells}</tr>`;
         })
         .join("");
 
-      tableEl.hidden = false;
-      statusEl.textContent = `${rows.length} ligne(s) chargée(s).`;
+      return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    }
+
+    function renderTables(resultsByTable) {
+      containerEl.innerHTML = resultsByTable
+        .map(({ tableName, rows }) => {
+          return `
+            <section class="table-block">
+              <h2 class="table-title">${escapeHtml(tableName)} — ${rows.length} ligne(s)</h2>
+              ${createTableMarkup(rows)}
+            </section>
+          `;
+        })
+        .join("");
     }
 
     async function loadData() {
       try {
+        const payload = {
+          appID,
+          queries: tableNames.map((tableName) => ({ tableName, utc: true })),
+        };
+
         const response = await fetch(endpoint, {
           method: "POST",
           headers,
@@ -145,10 +199,19 @@
         }
 
         const data = await response.json();
-        const rows = normalizeRows(data);
-        renderTable(rows);
+        const queryResults = Array.isArray(data) ? data : [];
+
+        const resultsByTable = tableNames.map((tableName, index) => ({
+          tableName,
+          rows: normalizeRows(queryResults[index]),
+        }));
+
+        const totalRows = resultsByTable.reduce((sum, result) => sum + result.rows.length, 0);
+        statusEl.textContent = `${resultsByTable.length} tableau(x) chargé(s), ${totalRows} ligne(s) au total.`;
+        renderTables(resultsByTable);
       } catch (error) {
-        statusEl.innerHTML = `<span class="error">Impossible de charger les données : ${error.message}</span>`;
+        statusEl.innerHTML = `<span class="error">Impossible de charger les tableaux : ${escapeHtml(error.message)}</span>`;
+        containerEl.innerHTML = "";
       }
     }
 
